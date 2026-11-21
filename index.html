@@ -182,6 +182,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
     <button class="ic" id="bBack" aria-label="Löschen erlauben" title="Backspace an/aus">
       <svg viewBox="0 0 24 24"><path d="M9 5h11v14H9l-6-7z"/><path id="backX" d="M12.5 9.5l5 5m0-5l-5 5"/><path id="backSlash" d="M3 3l18 18"/></svg></button>
+    <button class="ic" id="bSound" aria-label="Tippgeräusche" title="Tippgeräusche an/aus">
+      <svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path id="sndOn" d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7.5a6.5 6.5 0 0 1 0 9"/><path id="sndOff" d="M16 10l4 4m0-4l-4 4"/></svg></button>
     <button class="ic" id="bTheme" aria-label="Lichtfarbe wechseln" title="Mondlicht / Kerze">
       <svg viewBox="0 0 24 24" id="themeIc"></svg></button>
     <button class="pdf" id="bPdf" aria-label="Als PDF sichern">
@@ -214,7 +216,76 @@ const coarse = matchMedia("(pointer: coarse)").matches;
 const KEY = "lampe.entries.v1", SKEY = "lampe.settings.v1";
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 let entries = load(KEY, []);
-let settings = Object.assign({ theme: "moon", noBack: true, seenHint: false }, load(SKEY, {}));
+let settings = Object.assign({ theme: "moon", noBack: true, seenHint: false, sound: true }, load(SKEY, {}));
+
+/* ---------- Schreibmaschinen-Klang (synthetisch, keine Dateien) ---------- */
+let ac, master, noise;
+function audio() {
+  if (!settings.sound) return null;
+  try {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 4;
+      master = ac.createGain(); master.gain.value = .55;
+      // etwas „Raum“: kurzes, gedämpftes Echo wie ein Holztisch
+      const delay = ac.createDelay(); delay.delayTime.value = .018;
+      const fb = ac.createGain(); fb.gain.value = .22;
+      const damp = ac.createBiquadFilter(); damp.type = "lowpass"; damp.frequency.value = 2400;
+      master.connect(comp); master.connect(delay); delay.connect(damp); damp.connect(fb); fb.connect(delay); damp.connect(comp);
+      comp.connect(ac.destination);
+      noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ac.state === "suspended") ac.resume();
+    return ac;
+  } catch { return null; }
+}
+const rnd = (a, b) => a + Math.random() * (b - a);
+function burst(t, { freq, q = 1, type = "bandpass", dur, gain, attack = .0015 }) {
+  const s = ac.createBufferSource(); s.buffer = noise; s.playbackRate.value = rnd(.9, 1.1);
+  const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * .5); s.stop(t + dur + .02);
+}
+function thump(t, freq, dur, gain) {
+  const o = ac.createOscillator(); o.type = "sine"; o.frequency.setValueAtTime(freq * 1.6, t); o.frequency.exponentialRampToValueAtTime(freq, t + .012);
+  const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + .002); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + .02);
+}
+function bell(t) {
+  [[1567, .10, 1.6], [1567 * 2.76, .035, .7], [1567 * 5.4, .012, .35]].forEach(([f, gain, dur]) => {
+    const o = ac.createOscillator(); o.type = "sine"; o.frequency.value = f;
+    const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + .003); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + .05);
+  });
+}
+function sound(kind) {
+  if (!audio()) return;
+  const t = ac.currentTime + .005, v = rnd(.8, 1.1);
+  if (kind === "key") {               // Typenhebel trifft das Papier
+    burst(t, { freq: rnd(2300, 3400), q: 1.4, dur: rnd(.028, .04), gain: .5 * v });
+    burst(t, { freq: 6500, type: "highpass", q: .7, dur: .012, gain: .18 * v });
+    thump(t, rnd(140, 180), .05, .22 * v);
+    burst(t + rnd(.055, .08), { freq: rnd(1500, 2000), q: 2, dur: .02, gain: .1 * v }); // Taste kommt zurück
+  } else if (kind === "space") {      // Leertaste: tiefer, hölzerner
+    burst(t, { freq: rnd(800, 1000), q: 1.1, dur: .07, gain: .45 * v });
+    thump(t, 95, .09, .32 * v);
+    burst(t + .07, { freq: 1300, q: 2, dur: .025, gain: .1 * v });
+  } else if (kind === "enter") {      // Glocke + Wagenrücklauf
+    bell(t);
+    const s = ac.createBufferSource(); s.buffer = noise;
+    const f = ac.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 3;
+    f.frequency.setValueAtTime(500, t + .05); f.frequency.exponentialRampToValueAtTime(1600, t + .38);
+    const g = ac.createGain(); g.gain.setValueAtTime(0, t + .05); g.gain.linearRampToValueAtTime(.14, t + .12); g.gain.linearRampToValueAtTime(.1, t + .32); g.gain.exponentialRampToValueAtTime(.0001, t + .42);
+    s.connect(f); f.connect(g); g.connect(master); s.start(t + .05); s.stop(t + .45);
+    for (let i = 0; i < 5; i++) burst(t + .07 + i * .06, { freq: 2600, q: 3, dur: .012, gain: .08 }); // Ratsche
+    burst(t + .43, { freq: 1200, q: 1, dur: .06, gain: .4 }); thump(t + .43, 110, .1, .3);           // Anschlag
+  } else if (kind === "back") {
+    burst(t, { freq: 1800, q: 1.5, dur: .03, gain: .3 * v }); thump(t, 130, .05, .15);
+  } else if (kind === "blocked") {    // gedämpftes „Nein“
+    thump(t, 70, .12, .3); burst(t, { freq: 400, q: .8, dur: .06, gain: .15 });
+  }
+}
 let saveT;
 const saveNow = () => { try { localStorage.setItem(KEY, JSON.stringify(entries)); } catch {} };
 const save = () => { clearTimeout(saveT); saveT = setTimeout(saveNow, 400); };
@@ -306,6 +377,8 @@ input.addEventListener("keydown", ev => {
 input.addEventListener("input", () => {
   let v = input.value;
   if (settings.noBack && v.length < lastVal.length && lastType.startsWith("delete")) { input.value = v = lastVal; }
+  if (v.length > lastVal.length) { const ch = v.slice(-1); sound(ch === "\n" ? "enter" : ch === " " ? "space" : "key"); }
+  else if (v.length < lastVal.length && lastType.startsWith("delete")) sound("back");
   lastVal = v;
   entry.text = v; entry.updated = Date.now();
   if (entries[0] !== entry) { entries.splice(entries.indexOf(entry), 1); entries.unshift(entry); }
@@ -320,7 +393,7 @@ input.addEventListener("focus", () => { toEnd(); if (coarse) body.classList.remo
 input.addEventListener("blur", () => { saveNow(); if (coarse && !body.classList.contains("drawer-open")) body.classList.add("chrome-on"); });
 
 function nudge() { // sanftes „Nein“ der Lampe
-  pulse = 1.6; kick();
+  pulse = 1.6; kick(); sound("blocked");
   if (!settings.seenHint) { settings.seenHint = true; saveSettings(); toast("Kein Zurück – nur vorwärts. Oben rechts umschaltbar."); }
 }
 
@@ -366,7 +439,15 @@ function applySettings() {
   $("backSlash").style.display = settings.noBack ? "" : "none";
   b.setAttribute("aria-pressed", String(!settings.noBack));
   b.setAttribute("aria-label", settings.noBack ? "Löschen ist aus – einschalten" : "Löschen ist an – ausschalten");
+  $("sndOn").style.display = settings.sound ? "" : "none";
+  $("sndOff").style.display = settings.sound ? "none" : "";
+  $("bSound").setAttribute("aria-pressed", String(settings.sound));
 }
+$("bSound").addEventListener("click", () => {
+  settings.sound = !settings.sound; saveSettings(); applySettings();
+  if (settings.sound) sound("key");
+  toast(settings.sound ? "Tippgeräusche an" : "Tippgeräusche aus");
+});
 $("bBack").addEventListener("click", () => {
   settings.noBack = !settings.noBack; saveSettings(); applySettings();
   toast(settings.noBack ? "Kein Zurück – nur vorwärts" : "Löschen erlaubt");

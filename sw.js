@@ -1,4 +1,4 @@
-const CACHE = "lampe-v1";
+const CACHE = "lampe-v2";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png",
   "vendor/jspdf.umd.min.js", "vendor/CourierPrime-Regular.ttf", "vendor/CourierPrime-Italic.ttf"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
