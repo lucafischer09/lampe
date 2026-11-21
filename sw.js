@@ -1,4 +1,4 @@
-const CACHE = "lampe-v3";
+const CACHE = "lampe-v4";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png",
   "vendor/jspdf.umd.min.js", "vendor/CourierPrime-Regular.ttf", "vendor/CourierPrime-Italic.ttf",
   "vendor/sounds/map.json", "vendor/sounds/samt.wav", "vendor/sounds/creme.wav", "vendor/sounds/thock.wav"];
