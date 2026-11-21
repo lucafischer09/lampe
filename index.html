@@ -229,8 +229,8 @@ function audio() {
       master = ac.createGain(); master.gain.value = .5;
       // etwas „Raum“: kurzes, gedämpftes Echo wie ein Holztisch
       const delay = ac.createDelay(); delay.delayTime.value = .011;
-      const fb = ac.createGain(); fb.gain.value = .12;
-      const damp = ac.createBiquadFilter(); damp.type = "lowpass"; damp.frequency.value = 2400;
+      const fb = ac.createGain(); fb.gain.value = .08;
+      const damp = ac.createBiquadFilter(); damp.type = "lowpass"; damp.frequency.value = 1600;
       master.connect(comp); master.connect(delay); delay.connect(damp); damp.connect(fb); fb.connect(delay); damp.connect(comp);
       comp.connect(ac.destination);
       noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
@@ -241,42 +241,38 @@ function audio() {
   } catch { return null; }
 }
 const rnd = (a, b) => a + Math.random() * (b - a);
-/* Mechanische Tastatur: kurzer Impuls regt Resonanzen von Kappe und Gehäuse an („Thock“) */
-function hit(t, { body, gain, decay = .045, click = .5, bright = 1 }) {
-  const len = .006;
-  const s = ac.createBufferSource(); s.buffer = noise;
-  const env = ac.createGain();
-  env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(1, t + .0008); env.gain.exponentialRampToValueAtTime(.001, t + len);
-  s.connect(env); s.start(t, Math.random() * .8); s.stop(t + len + .01);
-  // Resonanzen: Gehäuse (tief), Kappe (mittel), Plastik (hoch)
-  [[body, 6, 1], [body * 2.9, 9, .55 * bright], [body * 6.3, 7, .22 * bright]].forEach(([f, q, g]) => {
-    const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = f * rnd(.97, 1.03); bp.Q.value = q;
-    const vg = ac.createGain(); vg.gain.setValueAtTime(g * gain * 9, t); vg.gain.exponentialRampToValueAtTime(.0001, t + decay * (f === body ? 1.6 : 1));
-    env.connect(bp); bp.connect(vg); vg.connect(master);
-  });
-  // feines Schalter-Klicken
-  const hp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 4500;
-  const cg = ac.createGain(); cg.gain.setValueAtTime(click * gain * .8, t); cg.gain.exponentialRampToValueAtTime(.0001, t + .008);
-  env.connect(hp); hp.connect(cg); cg.connect(master);
+/* „Creamy“ Tastatur: tiefer, weicher, gedämpfter Thock – keine hellen Klicks */
+function thock(t, { f = 180, gain = .5, dur = .04, tap = .5, cut = 1400 }) {
+  // tiefer Körper: kurzer Sinus mit Pitch-Abfall
+  const o = ac.createOscillator(); o.type = "sine";
+  o.frequency.setValueAtTime(f * 1.7, t); o.frequency.exponentialRampToValueAtTime(f, t + .012);
+  const og = ac.createGain();
+  og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(gain, t + .0015); og.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(og); og.connect(master); o.start(t); o.stop(t + dur + .02);
+  // weiches „Pock“: gedämpftes Rauschen, oben abgeschnitten
+  const n = ac.createBufferSource(); n.buffer = noise;
+  const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = cut * rnd(.92, 1.08); lp.Q.value = .9;
+  const pk = ac.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = f * 3.2; pk.Q.value = 2; pk.gain.value = 8;
+  const ng = ac.createGain();
+  ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(tap * gain * 1.4, t + .001); ng.gain.exponentialRampToValueAtTime(.0001, t + dur * .55);
+  n.connect(lp); lp.connect(pk); pk.connect(ng); ng.connect(master); n.start(t, Math.random() * .8); n.stop(t + dur);
 }
 function sound(kind) {
   if (!audio()) return;
-  const t = ac.currentTime + .003, v = rnd(.85, 1.08);
+  const t = ac.currentTime + .003, v = rnd(.88, 1.06);
   if (kind === "key") {
-    hit(t, { body: rnd(330, 400), gain: .55 * v, decay: rnd(.035, .05) });                 // Taste schlägt auf
-    hit(t + rnd(.075, .1), { body: rnd(520, 600), gain: .16 * v, decay: .025, click: .3 }); // Taste kommt zurück
+    thock(t, { f: rnd(165, 195), gain: .55 * v, dur: rnd(.038, .048), tap: .6, cut: rnd(1300, 1600) });
+    thock(t + rnd(.07, .095), { f: rnd(240, 270), gain: .12 * v, dur: .022, tap: .5, cut: 1200 }); // sanftes Zurückkommen
   } else if (kind === "space") {
-    hit(t, { body: rnd(210, 240), gain: .7 * v, decay: .07, bright: .8 });
-    hit(t + .012, { body: 900, gain: .08, decay: .03, click: .1 });                         // Stabilisator
-    hit(t + rnd(.09, .11), { body: 380, gain: .18 * v, decay: .03, click: .2 });
+    thock(t, { f: rnd(118, 130), gain: .7 * v, dur: .065, tap: .55, cut: 1100 });
+    thock(t + rnd(.085, .1), { f: 190, gain: .14 * v, dur: .028, tap: .4, cut: 1000 });
   } else if (kind === "enter") {
-    hit(t, { body: rnd(250, 280), gain: .8 * v, decay: .065, bright: .9 });
-    hit(t + .01, { body: 1100, gain: .07, decay: .025, click: .1 });
-    hit(t + rnd(.1, .12), { body: 420, gain: .2 * v, decay: .03, click: .25 });
+    thock(t, { f: rnd(135, 148), gain: .72 * v, dur: .06, tap: .6, cut: 1200 });
+    thock(t + rnd(.09, .11), { f: 210, gain: .15 * v, dur: .028, tap: .4, cut: 1000 });
   } else if (kind === "back") {
-    hit(t, { body: rnd(300, 340), gain: .45 * v, decay: .04 });
+    thock(t, { f: rnd(150, 170), gain: .45 * v, dur: .04, tap: .5, cut: 1300 });
   } else if (kind === "blocked") {
-    hit(t, { body: 140, gain: .35, decay: .08, click: 0, bright: .3 });
+    thock(t, { f: 90, gain: .4, dur: .08, tap: .2, cut: 600 });
   }
 }
 let saveT;
