@@ -81,6 +81,25 @@ body.typing{cursor:none}
 .typing #caret{animation:none;opacity:1}
 .ph{color:var(--ink);opacity:.38;font-style:italic;margin-left:.35em}
 
+/* Physische Tastatur: Ton beim Drücken UND Loslassen, virtuelle Taste bewegt sich mit */
+const held = new Set();
+const isField = el => el && el !== input && /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName);
+addEventListener("keydown", ev => {
+  if (isField(document.activeElement) || body.classList.contains("drawer-open")) return;
+  if (ev.metaKey || ev.ctrlKey) return;
+  lastKeyAt = performance.now();
+  if (ev.repeat) return;
+  const blocked = settings.noBack && (ev.key === "Backspace" || ev.key === "Delete");
+  if (!blocked) click(ev.code, 0);
+  held.add(ev.code); kbPress(ev.code, true);
+}, true);
+addEventListener("keyup", ev => {
+  if (!held.has(ev.code)) return;
+  held.delete(ev.code); kbPress(ev.code, false);
+  if (!(settings.noBack && (ev.key === "Backspace" || ev.key === "Delete"))) click(ev.code, 1);
+}, true);
+addEventListener("blur", () => { held.forEach(c => kbPress(c, false)); held.clear(); });
+
 /* ---------- Bedienleiste ---------- */
 .chrome{position:fixed;left:0;right:0;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:16px;
   padding:calc(env(safe-area-inset-top) + 18px) calc(env(safe-area-inset-right) + 22px) 18px calc(env(safe-area-inset-left) + 26px);
@@ -145,10 +164,101 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
   background:transparent;caret-color:transparent;z-index:-1;-webkit-user-select:text;user-select:text}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
+/* ---------- Creamy-Tastatur ---------- */
+.kb{--kh:46px;--gap:7px;--cream1:#f7f0e3;--cream2:#ebe2d0;--wall:#c9bb9f;--mod1:#e3d7c1;--mod2:#d5c7ad;--acc1:#d9b48c;--acc2:#c99c6f;--legend:#7b6c57;
+  position:fixed;z-index:3;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);width:min(900px,calc(100vw - 28px));
+  padding:16px 16px 18px;border-radius:24px;display:flex;flex-direction:column;gap:var(--gap);
+  background:linear-gradient(180deg,#e6dcc8,#d6c9b0);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(90,70,40,.22),0 2px 0 #b8a98d,0 30px 60px -10px rgba(0,0,0,.65),0 12px 24px rgba(0,0,0,.4);
+  transform:translate(-50%,0);transition:transform .7s cubic-bezier(.2,.8,.2,1),opacity .6s ease,filter .8s ease;
+  filter:brightness(calc(.42 + .4*var(--on))) saturate(.92);
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+[data-theme="ember"] .kb{filter:brightness(calc(.42 + .42*var(--on))) sepia(.18) saturate(1.05)}
+/* Licht der Lampe fällt auf die Tasten */
+.kb::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;mix-blend-mode:soft-light;
+  background:radial-gradient(70% 140% at calc(var(--lx) - (50vw - 50%)) -40%,rgba(var(--hot),.75),transparent 70%)}
+body:not(.kb-on) .kb{transform:translate(-50%,calc(100% + 40px));opacity:0;pointer-events:none}
+.typing .kb{filter:brightness(calc(.45 + .42*var(--on))) saturate(.95)}
+.kr{display:flex;gap:var(--gap)}
+.k{position:relative;height:var(--kh);min-width:0;border-radius:11px;padding:0;border:0;color:var(--legend);cursor:default;
+  background:linear-gradient(180deg,var(--cream1),var(--cream2));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -2px 1px rgba(150,128,94,.16),0 1px 0 var(--wall),0 3px 0 var(--wall),0 4px 0 #b3a385,0 7px 9px -2px rgba(40,28,10,.45);
+  transform:translate3d(0,0,0);transition:transform .32s cubic-bezier(.25,1.7,.45,1),box-shadow .32s cubic-bezier(.25,1.7,.45,1),filter .25s;
+  -webkit-tap-highlight-color:transparent}
+/* leicht gewölbte Kappe */
+.cap{position:absolute;inset:3px 4px 6px;border-radius:8px;display:flex;align-items:flex-start;justify-content:flex-start;padding:6px 8px;
+  background:radial-gradient(120% 90% at 50% 20%,rgba(255,255,255,.55),rgba(255,255,255,0) 60%),linear-gradient(180deg,rgba(0,0,0,.0),rgba(120,96,60,.06));
+  box-shadow:inset 0 0 0 .5px rgba(160,135,95,.12)}
+.lg{font:500 12px/1 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;letter-spacing:.02em;opacity:.85}
+.hm{position:absolute;left:50%;bottom:6px;width:9px;height:2px;border-radius:2px;transform:translateX(-50%);background:rgba(123,108,87,.45)}
+.k.m{background:linear-gradient(180deg,var(--mod1),var(--mod2))}
+.k.m .lg{font-size:13px;opacity:.75}
+.k.a{background:linear-gradient(180deg,var(--acc1),var(--acc2));color:#fff7ec;
+  box-shadow:inset 0 1px 0 rgba(255,240,220,.7),inset 0 -2px 1px rgba(110,70,30,.2),0 1px 0 #a87b52,0 3px 0 #a87b52,0 4px 0 #946a43,0 7px 9px -2px rgba(40,22,5,.5)}
+.k.a .cap{background:radial-gradient(120% 90% at 50% 20%,rgba(255,255,255,.35),rgba(255,255,255,0) 60%)}
+.k.a .lg{opacity:1;font-size:14px}
+.k.sp .cap{justify-content:center}
+@media (hover:hover){.k:hover{filter:brightness(1.035)}}
+.k.down{transform:translate3d(0,3px,0);transition-duration:.045s;transition-timing-function:cubic-bezier(.2,0,.4,1);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -1px 1px rgba(150,128,94,.12),0 1px 0 var(--wall),0 1px 0 #b3a385,0 2px 3px rgba(40,28,10,.4)}
+.k.a.down{box-shadow:inset 0 1px 0 rgba(255,240,220,.6),0 1px 0 #946a43,0 2px 3px rgba(40,22,5,.45)}
+.kb-still .k,.kb-still .k.down{transition:none}
+.kb-still .k.down{transform:none;filter:brightness(.93)}
+.k.on .lg{color:#a8794c;opacity:1}
+.k.lock .cap::after{content:"";position:absolute;right:7px;top:7px;width:4px;height:4px;border-radius:50%;background:#c58a52;box-shadow:0 0 6px #e7a96b}
+/* Handy / Tablet */
+.kb.mob{--kh:48px;--gap:6px;width:calc(100vw - 12px);bottom:calc(env(safe-area-inset-bottom) + 6px);padding:10px 6px 10px;border-radius:20px}
+.kb.mob .k{border-radius:9px}
+.kb.mob .cap{align-items:center;justify-content:center;padding:0;inset:2px 3px 5px}
+.kb.mob .lg{font-size:21px;font-weight:400;letter-spacing:0;opacity:.9}
+.kb.mob.caps .k:not(.m):not(.a):not(.sp) .lg{text-transform:uppercase}
+.kb.mob .k.m .lg{font-size:15px}
+.kb.mob .k.sp .lg{font-size:14px}
+@media (min-width:700px){.kb.mob{--kh:58px;--gap:8px;width:min(860px,calc(100vw - 24px));padding:14px 12px}.kb.mob .lg{font-size:23px}}
+.kb-on.chrome-on .peek{opacity:0}
+
+/* ---------- Einstellungen ---------- */
+.pscrim{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .4s}
+.panel{position:fixed;z-index:11;top:calc(env(safe-area-inset-top) + 74px);right:calc(env(safe-area-inset-right) + 18px);width:min(360px,calc(100vw - 24px));
+  max-height:calc(100dvh - env(safe-area-inset-top) - 96px);overflow-y:auto;padding:18px 18px 16px;border-radius:22px;
+  background:var(--glass);-webkit-backdrop-filter:blur(28px) saturate(1.2);backdrop-filter:blur(28px) saturate(1.2);
+  box-shadow:inset 0 0 0 1px var(--line),0 30px 80px rgba(0,0,0,.55);color:var(--ui-strong);
+  opacity:0;transform:translateY(-8px) scale(.98);transform-origin:top right;pointer-events:none;transition:opacity .3s ease,transform .45s cubic-bezier(.2,.9,.2,1)}
+.panel-open .panel{opacity:1;transform:none;pointer-events:auto}
+.panel-open .pscrim{opacity:1;pointer-events:auto}
+.ph2{display:flex;align-items:center;justify-content:space-between;margin:-4px -6px 8px 4px}
+.ph2 h2{font-family:"Courier Prime",monospace;font-weight:400;font-size:21px;letter-spacing:.02em}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px;padding:0 4px;font-size:14.5px;border-top:1px solid var(--line)}
+.row[hidden]{display:none}
+.vol{flex-wrap:wrap;padding-bottom:14px}
+.vol output{font-size:12.5px;color:var(--ui);font-variant-numeric:tabular-nums}
+.muted .vol,.muted .profs{opacity:.4;pointer-events:none}
+.sw{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:46px;height:28px;border-radius:999px;cursor:pointer;
+  background:rgba(var(--light),.16);box-shadow:inset 0 0 0 1px rgba(var(--light),.18);transition:background .25s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#f4ede0;
+  box-shadow:0 2px 5px rgba(0,0,0,.35);transition:transform .35s cubic-bezier(.3,1.5,.5,1)}
+.sw:checked{background:rgba(var(--hot),.55)}
+.sw:checked::after{transform:translateX(18px)}
+.sw:focus-visible,.prof:focus-visible,#oVol:focus-visible{outline:2px solid rgba(var(--hot),.7);outline-offset:2px}
+#oVol{--p:70%;width:100%;appearance:none;-webkit-appearance:none;height:28px;background:transparent;cursor:pointer}
+#oVol::-webkit-slider-runnable-track{height:6px;border-radius:6px;background:linear-gradient(90deg,rgba(var(--hot),.75) var(--p),rgba(var(--light),.16) var(--p))}
+#oVol::-moz-range-track{height:6px;border-radius:6px;background:linear-gradient(90deg,rgba(var(--hot),.75) var(--p),rgba(var(--light),.16) var(--p))}
+#oVol::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-8px;border-radius:50%;background:#f4ede0;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+#oVol::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:#f4ede0;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.profs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:2px 0 14px}
+.prof{text-align:left;padding:12px 11px;border-radius:14px;background:rgba(var(--light),.07);box-shadow:inset 0 0 0 1px rgba(var(--light),.12);transition:background .2s,box-shadow .2s,transform .2s}
+.prof:hover{background:rgba(var(--light),.12)}
+.prof:active{transform:scale(.97)}
+.prof b{display:block;font-weight:500;font-size:14px}
+.prof small{display:block;font-size:11px;line-height:1.35;color:var(--ui);margin-top:3px}
+.prof[aria-checked="true"]{background:rgba(var(--hot),.16);box-shadow:inset 0 0 0 1.5px rgba(var(--hot),.55)}
+.pfoot{font-size:11.5px;line-height:1.5;color:var(--ui);padding:12px 4px 0;border-top:1px solid var(--line)}
+
 @keyframes blink{0%,45%{opacity:1}55%,95%{opacity:.15}100%{opacity:1}}
 @keyframes breathe{0%,100%{opacity:1}50%{opacity:.93}}
 @media (prefers-reduced-motion:reduce){
   .lamp,#caret{animation:none}
+  .k,.k.down,.panel,.kb{transition:none}
   .page{transition:none}
 }
 @media (max-width:560px){
@@ -184,6 +294,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
       <svg viewBox="0 0 24 24"><path d="M9 5h11v14H9l-6-7z"/><path id="backX" d="M12.5 9.5l5 5m0-5l-5 5"/><path id="backSlash" d="M3 3l18 18"/></svg></button>
     <button class="ic" id="bSound" aria-label="Tippgeräusche" title="Tippgeräusche an/aus">
       <svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path id="sndOn" d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7.5a6.5 6.5 0 0 1 0 9"/><path id="sndOff" d="M16 10l4 4m0-4l-4 4"/></svg></button>
+    <button class="ic" id="bKb" aria-label="Tastatur-Einstellungen" title="Tastatur">
+      <svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></svg></button>
     <button class="ic" id="bTheme" aria-label="Lichtfarbe wechseln" title="Mondlicht / Kerze">
       <svg viewBox="0 0 24 24" id="themeIc"></svg></button>
     <button class="pdf" id="bPdf" aria-label="Als PDF sichern">
@@ -200,6 +312,26 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
   <p class="foot">Alles bleibt auf diesem Gerät. Sichere Einträge als PDF in deinen iCloud-Ordner.</p>
 </aside>
 
+<div class="kb" id="kb"></div>
+
+<div class="pscrim" id="pScrim"></div>
+<section class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+  <div class="ph2"><h2 id="pTitle">Tastatur</h2>
+    <button class="ic" id="pClose" aria-label="Schließen"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <label class="row"><span>Tippgeräusche</span><input type="checkbox" class="sw" id="oSound"></label>
+  <div class="row vol"><span>Lautstärke</span><output id="volOut">70 %</output>
+    <input type="range" id="oVol" min="0" max="100" step="1" aria-label="Lautstärke"></div>
+  <div class="profs" role="radiogroup" aria-label="Soundprofil">
+    <button class="prof" role="radio" data-p="samt"><b>Samt</b><small>Topre · gedämpft, weich</small></button>
+    <button class="prof" role="radio" data-p="creme"><b>Creme</b><small>EG Oreo · rund, cremig</small></button>
+    <button class="prof" role="radio" data-p="thock"><b>Thock</b><small>Linear PBT · tief, satt</small></button>
+  </div>
+  <label class="row"><span>Tastatur anzeigen</span><input type="checkbox" class="sw" id="oKb"></label>
+  <label class="row"><span>Tasten-Animation</span><input type="checkbox" class="sw" id="oAnim"></label>
+  <label class="row" id="rowHap"><span>Haptisches Feedback</span><input type="checkbox" class="sw" id="oHap"></label>
+  <p class="pfoot">Aufnahmen echter Custom-Keyboards, lokal gespeichert – funktioniert auch offline. Auf dem iPhone muss der Stummschalter aus sein.</p>
+</section>
+
 <div class="toast" id="toast" role="status"></div>
 
 <script src="vendor/jspdf.umd.min.js" defer></script>
@@ -211,70 +343,75 @@ const root = document.documentElement, body = document.body;
 const input = $("input"), page = $("page"), txt = $("txt"), caret = $("caret"), ph = $("ph");
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const coarse = matchMedia("(pointer: coarse)").matches;
+const PROFILES_OK = p => ["samt", "creme", "thock"].includes(p);
 
 /* ---------- Speicher ---------- */
 const KEY = "lampe.entries.v1", SKEY = "lampe.settings.v1";
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 let entries = load(KEY, []);
-let settings = Object.assign({ theme: "moon", noBack: true, seenHint: false, sound: true }, load(SKEY, {}));
+let settings = Object.assign({ theme: "moon", noBack: true, seenHint: false, sound: true, volume: .7, profile: "samt", anim: true, haptic: true, kb: true }, load(SKEY, {}));
+if (!PROFILES_OK(settings.profile)) settings.profile = "samt";
 
-/* ---------- Schreibmaschinen-Klang (synthetisch, keine Dateien) ---------- */
-let ac, master, noise;
-function audio() {
-  if (!settings.sound) return null;
-  try {
-    if (!ac) {
-      ac = new (window.AudioContext || window.webkitAudioContext)();
-      const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 4;
-      master = ac.createGain(); master.gain.value = .5;
-      // etwas „Raum“: kurzes, gedämpftes Echo wie ein Holztisch
-      const delay = ac.createDelay(); delay.delayTime.value = .011;
-      const fb = ac.createGain(); fb.gain.value = .08;
-      const damp = ac.createBiquadFilter(); damp.type = "lowpass"; damp.frequency.value = 1600;
-      master.connect(comp); master.connect(delay); delay.connect(damp); damp.connect(fb); fb.connect(delay); damp.connect(comp);
-      comp.connect(ac.destination);
-      noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
-      const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    }
-    if (ac.state === "suspended") ac.resume();
-    return ac;
-  } catch { return null; }
-}
+/* ---------- Creamy-Klang: echte Aufnahmen von Custom-Keyboards (lokal, Sprite) ---------- */
+const PROFILES = {
+  samt:  { name: "Samt",  sub: "Topre · gedämpft, weich" },
+  creme: { name: "Creme", sub: "EG Oreo · rund, cremig" },
+  thock: { name: "Thock", sub: "Linear PBT · tief, satt" }
+};
+const POOL = ["KeyA","KeyS","KeyD","KeyF","KeyJ","KeyK","KeyL","KeyE","KeyR","KeyT","KeyU","KeyI","KeyO","KeyN","KeyM","KeyH"];
+let ac = null, master = null, smap = null, bufs = {}, loading = {};
 const rnd = (a, b) => a + Math.random() * (b - a);
-/* „Creamy“ Tastatur: tiefer, weicher, gedämpfter Thock – keine hellen Klicks */
-function thock(t, { f = 180, gain = .5, dur = .04, tap = .5, cut = 1400 }) {
-  // tiefer Körper: kurzer Sinus mit Pitch-Abfall
-  const o = ac.createOscillator(); o.type = "sine";
-  o.frequency.setValueAtTime(f * 1.7, t); o.frequency.exponentialRampToValueAtTime(f, t + .012);
-  const og = ac.createGain();
-  og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(gain, t + .0015); og.gain.exponentialRampToValueAtTime(.0001, t + dur);
-  o.connect(og); og.connect(master); o.start(t); o.stop(t + dur + .02);
-  // weiches „Pock“: gedämpftes Rauschen, oben abgeschnitten
-  const n = ac.createBufferSource(); n.buffer = noise;
-  const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = cut * rnd(.92, 1.08); lp.Q.value = .9;
-  const pk = ac.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = f * 3.2; pk.Q.value = 2; pk.gain.value = 8;
-  const ng = ac.createGain();
-  ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(tap * gain * 1.4, t + .001); ng.gain.exponentialRampToValueAtTime(.0001, t + dur * .55);
-  n.connect(lp); lp.connect(pk); pk.connect(ng); ng.connect(master); n.start(t, Math.random() * .8); n.stop(t + dur);
-}
-function sound(kind) {
-  if (!audio()) return;
-  const t = ac.currentTime + .003, v = rnd(.88, 1.06);
-  if (kind === "key") {
-    thock(t, { f: rnd(165, 195), gain: .55 * v, dur: rnd(.038, .048), tap: .6, cut: rnd(1300, 1600) });
-    thock(t + rnd(.07, .095), { f: rnd(240, 270), gain: .12 * v, dur: .022, tap: .5, cut: 1200 }); // sanftes Zurückkommen
-  } else if (kind === "space") {
-    thock(t, { f: rnd(118, 130), gain: .7 * v, dur: .065, tap: .55, cut: 1100 });
-    thock(t + rnd(.085, .1), { f: 190, gain: .14 * v, dur: .028, tap: .4, cut: 1000 });
-  } else if (kind === "enter") {
-    thock(t, { f: rnd(135, 148), gain: .72 * v, dur: .06, tap: .6, cut: 1200 });
-    thock(t + rnd(.09, .11), { f: 210, gain: .15 * v, dur: .028, tap: .4, cut: 1000 });
-  } else if (kind === "back") {
-    thock(t, { f: rnd(150, 170), gain: .45 * v, dur: .04, tap: .5, cut: 1300 });
-  } else if (kind === "blocked") {
-    thock(t, { f: 90, gain: .4, dur: .08, tap: .2, cut: 600 });
+function ctx() {
+  if (!ac) {
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+      master = ac.createGain(); master.gain.value = vol(); master.connect(ac.destination);
+    } catch { ac = null; }
   }
+  return ac;
 }
+const vol = () => Math.pow(settings.volume, 1.6) * 1.1;
+const mapReady = fetch("vendor/sounds/map.json").then(r => r.json()).then(m => (smap = m)).catch(() => {});
+function loadProfile(name) {
+  if (bufs[name] || loading[name] || !ctx()) return loading[name];
+  return loading[name] = fetch(`vendor/sounds/${name}.wav`).then(r => r.arrayBuffer())
+    .then(ab => new Promise((ok, no) => ac.decodeAudioData(ab, ok, no))).then(b => { bufs[name] = b; }).catch(() => { loading[name] = null; });
+}
+const unlock = () => { if (ac && ac.state !== "running") ac.resume().catch(() => {}); };
+const hash = s => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
+function sampleFor(code) {
+  if (code === "Space" || code === "Enter" || code === "Backspace") return code;
+  if (code === "NumpadEnter") return "Enter";
+  return POOL[code ? hash(code) % POOL.length : (Math.random() * POOL.length) | 0];
+}
+/* phase 0 = Taste geht runter, 1 = kommt zurück */
+function click(code, phase = 0, opt = {}) {
+  if (!settings.sound || !ctx() || !smap) return;
+  unlock();
+  const name = settings.profile, buf = bufs[name];
+  if (!buf) { loadProfile(name); return; }
+  const seg = smap[name][sampleFor(code)][phase];
+  const src = ac.createBufferSource(); src.buffer = buf;
+  src.playbackRate.value = (opt.rate || 1) * rnd(.965, 1.035);           // jede Taste minimal anders
+  const g = ac.createGain(); g.gain.value = (opt.gain || 1) * (phase ? .62 : 1) * rnd(.86, 1);
+  src.connect(g); g.connect(master);
+  src.start(ac.currentTime, seg[0], seg[1]);
+}
+const sound = kind => { if (kind === "blocked") click("Backspace", 0, { rate: .78, gain: .55 }); };
+
+/* ---------- Haptik ---------- */
+let hapLabel = null;
+function haptic() {
+  if (!settings.haptic || !coarse) return;
+  if (navigator.vibrate) { try { navigator.vibrate(6); } catch {} return; }
+  // iOS 18+: Schalter-Element löst ein leichtes Taptic-Feedback aus
+  if (!hapLabel) {
+    hapLabel = document.createElement("label"); hapLabel.className = "sr"; hapLabel.setAttribute("aria-hidden", "true");
+    hapLabel.innerHTML = '<input type="checkbox" switch tabindex="-1">'; document.body.appendChild(hapLabel);
+  }
+  hapLabel.click();
+}
+
 let saveT;
 const saveNow = () => { try { localStorage.setItem(KEY, JSON.stringify(entries)); } catch {} };
 const save = () => { clearTimeout(saveT); saveT = setTimeout(saveNow, 400); };
@@ -320,8 +457,10 @@ const switchOn = () => lampSequence([[.55, 90], [.12, 70], [.8, 110], [.35, 60],
 
 /* ---------- Layout ---------- */
 function layout() {
-  const vv = window.visualViewport, h = vv ? vv.height : innerHeight, top = vv ? vv.offsetTop : 0;
-  anchorY = top + h * (h < 520 ? .62 : .56);
+  const vv = window.visualViewport, top = vv ? vv.offsetTop : 0;
+  let h = vv ? vv.height : innerHeight;
+  if (kbOn()) h -= kbEl.offsetHeight + 18;
+  anchorY = top + h * (kbOn() ? .74 : h < 520 ? .62 : .56);
   const ch = caret.offsetHeight || 20;
   const maxManual = Math.max(0, caret.offsetTop);
   manual = Math.min(Math.max(0, manual), maxManual);
@@ -350,7 +489,7 @@ function openEntry(e) {
 }
 
 /* ---------- Eingabe ---------- */
-let lastVal = entry.text, typingT, lastType = "";
+let lastVal = entry.text, typingT, lastType = "", lastKeyAt = -1e9;
 input.value = entry.text;
 
 input.addEventListener("beforeinput", ev => {
@@ -366,8 +505,11 @@ input.addEventListener("keydown", ev => {
 input.addEventListener("input", () => {
   let v = input.value;
   if (settings.noBack && v.length < lastVal.length && lastType.startsWith("delete")) { input.value = v = lastVal; }
-  if (v.length > lastVal.length) { const ch = v.slice(-1); sound(ch === "\n" ? "enter" : ch === " " ? "space" : "key"); }
-  else if (v.length < lastVal.length && lastType.startsWith("delete")) sound("back");
+  // Fallback (z. B. iPhone-Systemtastatur ohne keydown): Ton beim Text-Ereignis
+  if (performance.now() - lastKeyAt > 120 && v !== lastVal) {
+    const code = v.length < lastVal.length ? "Backspace" : v.endsWith("\n") ? "Enter" : v.endsWith(" ") ? "Space" : "";
+    click(code, 0); setTimeout(() => click(code, 1), 70);
+  }
   lastVal = v;
   entry.text = v; entry.updated = Date.now();
   if (entries[0] !== entry) { entries.splice(entries.indexOf(entry), 1); entries.unshift(entry); }
@@ -431,11 +573,16 @@ function applySettings() {
   $("sndOn").style.display = settings.sound ? "" : "none";
   $("sndOff").style.display = settings.sound ? "none" : "";
   $("bSound").setAttribute("aria-pressed", String(settings.sound));
+  body.classList.toggle("kb-on", !!settings.kb);
+  body.classList.toggle("kb-still", !settings.anim || reduce);
+  input.inputMode = kbOn() && coarse ? "none" : "text";
+  if (master) master.gain.setTargetAtTime(vol(), ac.currentTime, .02);
+  if (settings.sound) loadProfile(settings.profile);
 }
 $("bSound").addEventListener("click", () => {
   settings.sound = !settings.sound; saveSettings(); applySettings();
-  if (settings.sound) sound("key");
-  toast(settings.sound ? "Tippgeräusche an" : "Tippgeräusche aus");
+  if (settings.sound) { click("KeyF", 0); setTimeout(() => click("KeyF", 1), 80); }
+  syncPanel(); toast(settings.sound ? "Tippgeräusche an" : "Tippgeräusche aus");
 });
 $("bBack").addEventListener("click", () => {
   settings.noBack = !settings.noBack; saveSettings(); applySettings();
@@ -484,7 +631,156 @@ $("bNew").addEventListener("click", () => {
   openEntry(e); saveNow(); closeDrawer();
   if (coarse) setTimeout(() => input.focus({ preventScroll: true }), 60);
 });
-addEventListener("keydown", ev => { if (ev.key === "Escape") body.classList.contains("drawer-open") ? closeDrawer() : showChrome(); });
+addEventListener("keydown", ev => { if (ev.key === "Escape") body.classList.contains("panel-open") ? closePanel() : body.classList.contains("drawer-open") ? closeDrawer() : showChrome(); });
+
+/* ---------- Creamy-Tastatur ---------- */
+const kbEl = $("kb");
+const kbOn = () => !!settings.kb;
+const keyEls = new Map();
+/* [Beschriftung, code, Breite, Art] – Art: m = Modifikator, a = Akzent */
+const FULL = [
+  [["^","Backquote"],["1","Digit1"],["2","Digit2"],["3","Digit3"],["4","Digit4"],["5","Digit5"],["6","Digit6"],["7","Digit7"],["8","Digit8"],["9","Digit9"],["0","Digit0"],["ß","Minus"],["´","Equal"],["⌫","Backspace",1.9,"m"]],
+  [["⇥","Tab",1.5,"m"],["Q","KeyQ"],["W","KeyW"],["E","KeyE"],["R","KeyR"],["T","KeyT"],["Z","KeyY"],["U","KeyU"],["I","KeyI"],["O","KeyO"],["P","KeyP"],["Ü","BracketLeft"],["+","BracketRight"],["#","Backslash",1.4]],
+  [["⇪","CapsLock",1.8,"m"],["A","KeyA"],["S","KeyS"],["D","KeyD"],["F","KeyF",1,"",1],["G","KeyG"],["H","KeyH"],["J","KeyJ",1,"",1],["K","KeyK"],["L","KeyL"],["Ö","Semicolon"],["Ä","Quote"],["↵","Enter",2.1,"a"]],
+  [["⇧","ShiftLeft",1.35,"m"],["<","IntlBackslash"],["Y","KeyZ"],["X","KeyX"],["C","KeyC"],["V","KeyV"],["B","KeyB"],["N","KeyN"],["M","KeyM"],[",","Comma"],[".","Period"],["-","Slash"],["⇧","ShiftRight",2.65,"m"]],
+  [["fn","Fn",1.25,"m"],["⌃","ControlLeft",1.25,"m"],["⌥","AltLeft",1.25,"m"],["⌘","MetaLeft",1.5,"m"],["","Space",6.2],["⌘","MetaRight",1.5,"m"],["⌥","AltRight",1.25,"m"],["←","ArrowLeft",1,"m"],["→","ArrowRight",1,"m"]]
+];
+const MOB = {
+  abc: [
+    [["q"],["w"],["e"],["r"],["t"],["z"],["u"],["i"],["o"],["p"],["ü"]],
+    [["a"],["s"],["d"],["f"],["g"],["h"],["j"],["k"],["l"],["ö"],["ä"]],
+    [["⇧","Shift",1.5,"m"],["y"],["x"],["c"],["v"],["b"],["n"],["m"],["⌫","Backspace",1.5,"m"]],
+    [["123","Layer",1.6,"m"],[",",null,1,"m"],["Leerzeichen","Space",5.2],[".",null,1,"m"],["↵","Enter",1.9,"a"]]
+  ],
+  num: [
+    [["1"],["2"],["3"],["4"],["5"],["6"],["7"],["8"],["9"],["0"]],
+    [["-"],["/"],[":"],[";"],["("],[")"],["€"],["&"],["@"],["\""]],
+    [["ß",null,1.2],["?"],["!"],["'"],["…"],["–"],["„"],["“"],["⌫","Backspace",1.5,"m"]],
+    [["ABC","Layer",1.6,"m"],[",",null,1,"m"],["Leerzeichen","Space",5.2],[".",null,1,"m"],["↵","Enter",1.9,"a"]]
+  ]
+};
+let layer = "abc", shift = 0, shiftT = 0; // shift: 0 aus, 1 einmal, 2 feststellen
+function buildKb() {
+  kbEl.innerHTML = ""; keyEls.clear();
+  const rows = coarse ? MOB[layer] : FULL;
+  kbEl.classList.toggle("mob", coarse);
+  for (const row of rows) {
+    const r = document.createElement("div"); r.className = "kr";
+    for (const [label, code0, w = 1, kind = "", homing] of row) {
+      const code = code0 === undefined ? "Char" : code0;
+      const k = document.createElement(coarse ? "button" : "div");
+      k.className = "k" + (kind ? " " + kind : "") + (code === "Space" ? " sp" : "");
+      k.style.flexGrow = w; k.style.flexBasis = 0;
+      k.dataset.code = code || "Char"; k.dataset.ch = label;
+      if (coarse) { k.type = "button"; k.tabIndex = -1; k.setAttribute("aria-label", label === "⌫" ? "Löschen" : label === "↵" ? "Neue Zeile" : label === "⇧" ? "Umschalt" : label); }
+      else k.setAttribute("aria-hidden", "true");
+      k.innerHTML = `<span class="cap"><span class="lg">${label === "Leerzeichen" ? "" : label}</span>${homing ? '<i class="hm"></i>' : ""}</span>`;
+      r.appendChild(k);
+      if (code && code !== "Char") keyEls.set(code, k);
+    }
+    kbEl.appendChild(r);
+  }
+  if (coarse) paintShift();
+}
+function kbPress(code, down) {
+  const k = keyEls.get(code) || (code === "ShiftRight" && keyEls.get("Shift")) || null;
+  if (!k) return;
+  k.classList.toggle("down", down);
+}
+/* Touch / Maus: die virtuelle Tastatur tippt selbst */
+function autoShift() {
+  if (shift === 2) return;
+  const t = input.value; shift = !t || /[.!?…]\s+$|\n$/.test(t) ? 1 : 0; paintShift();
+}
+function paintShift() {
+  const k = keyEls.get("Shift"); if (k) { k.classList.toggle("on", shift > 0); k.classList.toggle("lock", shift === 2); }
+  kbEl.classList.toggle("caps", shift > 0 && layer === "abc");
+}
+function insertText(ch) {
+  if (ch === "\b") {
+    if (settings.noBack) { nudge(); return false; }
+    lastType = "deleteContentBackward";
+    input.value = [...input.value].slice(0, -1).join("");
+  } else { lastType = "insertText"; input.value += ch; }
+  lastKeyAt = performance.now();
+  input.dispatchEvent(new Event("input"));
+  return true;
+}
+let rep_ = null;
+kbEl.addEventListener("pointerdown", ev => {
+  const k = ev.target.closest(".k"); if (!k) return;
+  ev.preventDefault(); // Fokus bleibt im Text, kein Doppeltipp-Zoom
+  if (!coarse && document.activeElement !== input) focusInput();
+  const code = k.dataset.code, label = k.dataset.ch;
+  k.classList.add("down"); haptic();
+  const soundCode = code === "Char" ? "Key" + label.toUpperCase() : code;
+  const blocked = code === "Backspace" && settings.noBack;
+  if (!blocked) click(soundCode, 0);
+  k._snd = blocked ? null : soundCode;
+  try { k.setPointerCapture(ev.pointerId); } catch {}
+  if (!coarse) { // Desktop: Klick auf eine Taste tippt sie
+    const ch = code === "Space" ? " " : code === "Enter" ? "\n" : code === "Backspace" ? "\b" : /^(Key|Digit)/.test(code) || ["Minus","Comma","Period","Slash","Semicolon","Quote","BracketLeft"].includes(code) ? label.toLowerCase() : null;
+    if (ch) insertText(ch);
+    return;
+  }
+  if (code === "Shift") {
+    const now = performance.now();
+    shift = shift === 0 ? (now - shiftT < 320 ? 2 : 1) : (shift === 1 && now - shiftT < 320 ? 2 : 0);
+    shiftT = now; paintShift(); return;
+  }
+  if (code === "Layer") { layer = layer === "abc" ? "num" : "abc"; return; }
+  if (code === "Backspace") {
+    if (insertText("\b")) rep_ = setTimeout(function again() { if (insertText("\b")) { click("Backspace", 0, { gain: .7 }); rep_ = setTimeout(again, 75); } }, 420);
+    return;
+  }
+  const ch = code === "Space" ? " " : code === "Enter" ? "\n" : (shift && layer === "abc" ? label.toUpperCase() : label);
+  insertText(ch);
+  if (shift === 1) shift = 0;
+  autoShift();
+});
+const release = ev => {
+  const k = ev.target.closest && ev.target.closest(".k"); clearTimeout(rep_);
+  if (!k || !k.classList.contains("down")) return;
+  k.classList.remove("down");
+  if (k._snd) click(k._snd, 1);
+  if (coarse && k.dataset.code === "Layer") { buildKb(); autoShift(); }
+};
+kbEl.addEventListener("pointerup", release);
+kbEl.addEventListener("pointercancel", release);
+kbEl.addEventListener("lostpointercapture", release);
+kbEl.addEventListener("contextmenu", ev => ev.preventDefault());
+
+/* ---------- Tastatur-Einstellungen ---------- */
+const panel = $("panel");
+function syncPanel() {
+  $("oSound").checked = settings.sound; $("oAnim").checked = settings.anim; $("oHap").checked = settings.haptic; $("oKb").checked = settings.kb;
+  $("oVol").value = Math.round(settings.volume * 100); $("oVol").style.setProperty("--p", Math.round(settings.volume * 100) + "%");
+  $("volOut").textContent = Math.round(settings.volume * 100) + " %";
+  panel.querySelectorAll(".prof").forEach(b => b.setAttribute("aria-checked", String(b.dataset.p === settings.profile)));
+  $("rowHap").hidden = !coarse;
+  panel.classList.toggle("muted", !settings.sound);
+}
+function openPanel() { input.blur(); syncPanel(); body.classList.add("panel-open"); unlock(); ctx(); }
+function closePanel() { body.classList.remove("panel-open"); if (!coarse) setTimeout(focusInput, 50); }
+$("bKb").addEventListener("click", openPanel);
+$("pClose").addEventListener("click", closePanel);
+$("pScrim").addEventListener("click", closePanel);
+const demo = (code = "KeyJ") => { click(code, 0); setTimeout(() => click(code, 1), 85); };
+$("oSound").addEventListener("change", e => { settings.sound = e.target.checked; saveSettings(); applySettings(); syncPanel(); if (settings.sound) loadProfile(settings.profile).then?.(() => demo()); demo(); });
+$("oAnim").addEventListener("change", e => { settings.anim = e.target.checked; saveSettings(); applySettings(); });
+$("oHap").addEventListener("change", e => { settings.haptic = e.target.checked; saveSettings(); if (settings.haptic) haptic(); });
+$("oKb").addEventListener("change", e => { settings.kb = e.target.checked; saveSettings(); applySettings(); layout(); });
+let volDemoT = 0;
+$("oVol").addEventListener("input", e => {
+  settings.volume = e.target.value / 100; saveSettings(); applySettings(); syncPanel();
+  const now = performance.now(); if (now - volDemoT > 140) { volDemoT = now; demo(POOL[(Math.random() * POOL.length) | 0]); }
+});
+panel.querySelectorAll(".prof").forEach(b => b.addEventListener("click", async () => {
+  settings.profile = b.dataset.p; saveSettings(); syncPanel(); ctx(); unlock();
+  await loadProfile(settings.profile);
+  // kleines Probe-Tippen
+  ["KeyH", "KeyA", "KeyL", "KeyL", "KeyO"].forEach((c, i) => { setTimeout(() => click(c, 0), i * 120); setTimeout(() => click(c, 1), i * 120 + 70); });
+}));
 
 /* ---------- Hinweis ---------- */
 let toastT;
@@ -564,7 +860,8 @@ async function exportPDF(e) {
 $("bPdf").addEventListener("click", () => exportPDF(entry));
 
 /* ---------- Start ---------- */
-applySettings();
+buildKb(); applySettings(); syncPanel();
+mapReady.then(() => loadProfile(settings.profile));
 const relayout = () => layout();
 addEventListener("resize", relayout);
 window.visualViewport?.addEventListener("resize", relayout);

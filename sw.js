@@ -1,6 +1,7 @@
-const CACHE = "lampe-v2";
+const CACHE = "lampe-v3";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png",
-  "vendor/jspdf.umd.min.js", "vendor/CourierPrime-Regular.ttf", "vendor/CourierPrime-Italic.ttf"];
+  "vendor/jspdf.umd.min.js", "vendor/CourierPrime-Regular.ttf", "vendor/CourierPrime-Italic.ttf",
+  "vendor/sounds/map.json", "vendor/sounds/samt.wav", "vendor/sounds/creme.wav", "vendor/sounds/thock.wav"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))));
