@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Lampe</title>
+<meta name="description" content="Ruhig schreiben – nur eine Lampe und die Seite.">
+<meta name="theme-color" content="#0a0f18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lampe">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preload" href="vendor/CourierPrime-Regular.ttf" as="font" type="font/ttf" crossorigin>
+<style>
+@font-face{font-family:"Courier Prime";src:url(vendor/CourierPrime-Regular.ttf) format("truetype");font-weight:400;font-style:normal;font-display:block}
+@font-face{font-family:"Courier Prime";src:url(vendor/CourierPrime-Italic.ttf) format("truetype");font-weight:400;font-style:italic;font-display:block}
+
+:root{
+  --lx:50vw; --ly:55vh; --on:0; --pulse:0; --r:44vmax;
+  /* Mondlicht */
+  --bg:#080c14; --bg2:#0d1422;
+  --light:150,182,240; --hot:236,242,255; --ink:#dde6f6; --caret:255,246,224;
+  --ui:rgba(221,230,246,.62); --ui-strong:#eef3fc; --glass:rgba(14,20,33,.72); --line:rgba(170,190,230,.14);
+}
+[data-theme="ember"]{
+  --bg:#0c0806; --bg2:#160e09;
+  --light:255,168,92; --hot:255,226,186; --ink:#f4e4cc; --caret:255,214,150;
+  --ui:rgba(244,228,204,.6); --ui-strong:#fbf0e0; --glass:rgba(26,17,11,.74); --line:rgba(255,190,130,.14);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{position:fixed;inset:0;color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;
+  transition:background-color .8s ease}
+body.typing{cursor:none}
+
+/* ---------- Raum ---------- */
+.room{position:fixed;inset:0;overflow:hidden;background:radial-gradient(120vmax 90vmax at 50% 120%,var(--bg2),var(--bg) 70%)}
+/* Licht auf der „Seite“ */
+.lamp{position:absolute;inset:0;pointer-events:none;animation:breathe 7s ease-in-out infinite;
+  background:
+    radial-gradient(circle 2vmax at var(--lx) var(--ly), rgba(var(--hot),calc(.34*var(--on))), transparent 100%),
+    radial-gradient(ellipse 18vmax 12vmax at var(--lx) calc(var(--ly) - 1.5vmax), rgba(var(--hot),calc((.15 + .06*var(--pulse))*var(--on))), transparent 72%),
+    radial-gradient(ellipse 46vmax 30vmax at var(--lx) calc(var(--ly) - 6vmax), rgba(var(--light),calc(.17*var(--on))), transparent 70%),
+    radial-gradient(ellipse 95vmax 62vmax at var(--lx) calc(var(--ly) - 10vmax), rgba(var(--light),calc(.08*var(--on))), transparent 72%)}
+/* Lichtkegel nach oben über den geschriebenen Text */
+.beam{position:absolute;left:var(--lx);top:var(--ly);width:min(92vw,1100px);height:62vh;pointer-events:none;
+  transform:translate(-50%,-100%);opacity:calc(.9*var(--on));mix-blend-mode:screen;filter:blur(14px);
+  background:radial-gradient(ellipse 50% 100% at 50% 100%, rgba(var(--light),.10), rgba(var(--light),.035) 45%, transparent 75%);
+  -webkit-mask-image:linear-gradient(to top,#000 0%,#000 30%,transparent 100%);mask-image:linear-gradient(to top,#000 0%,#000 30%,transparent 100%)}
+/* Kante unter der Schreibzeile: dahinter wird es dunkel */
+.shelf{position:absolute;left:0;right:0;top:calc(var(--ly) + 1.25em);height:40vh;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(0,0,0,.0),rgba(0,0,0,.35) 30%,rgba(0,0,0,.55));opacity:var(--on);font-size:var(--fs)}
+.shelf::before{content:"";position:absolute;left:50%;top:0;width:min(84vw,980px);height:1px;transform:translateX(-50%);
+  background:linear-gradient(90deg,transparent,rgba(var(--light),.22) 30%,rgba(var(--hot),.35) 50%,rgba(var(--light),.22) 70%,transparent)}
+.grain{position:absolute;inset:-50%;pointer-events:none;opacity:.07;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 75% 70% at 50% 48%,transparent 40%,rgba(0,0,0,.6) 100%)}
+
+/* ---------- Text ---------- */
+.stage{position:absolute;inset:0;
+  --m:radial-gradient(ellipse calc(var(--r)*1.7) calc(var(--r)*.9) at var(--lx) calc(var(--ly) - 3vmax),
+     rgba(0,0,0,1) 0%, rgba(0,0,0,calc(.12 + .86*var(--on))) 14%, rgba(0,0,0,calc(.08 + .55*var(--on))) 36%,
+     rgba(0,0,0,calc(.04 + .2*var(--on))) 62%, rgba(0,0,0,calc(.02 + .05*var(--on))) 85%, transparent 100%);
+  -webkit-mask-image:var(--m);mask-image:var(--m)}
+.reading .stage{--r:110vmax}
+.page{--fs:clamp(17px,1rem + .55vw,23px);position:absolute;top:0;left:50%;width:min(37em,calc(100vw - 44px));
+  font-family:"Courier Prime","Courier New",monospace;font-size:var(--fs);line-height:1.9;letter-spacing:.012em;
+  white-space:pre-wrap;overflow-wrap:break-word;color:var(--ink);
+  text-shadow:0 0 .55em rgba(var(--light),.38),0 0 .08em rgba(var(--hot),.25);
+  transform:translate3d(-50%,60vh,0);transition:transform .42s cubic-bezier(.2,.75,.25,1);will-change:transform}
+.dragging .page{transition:none}
+#caret{display:inline-block;position:relative;width:2px;height:1.12em;margin-left:1px;vertical-align:-.2em;border-radius:2px;
+  background:rgb(var(--caret));box-shadow:0 0 4px 1px rgba(var(--caret),.9),0 0 18px 4px rgba(var(--caret),.35);
+  animation:blink 1.15s ease-in-out infinite}
+#caret::after{content:"";position:absolute;left:50%;top:calc(100% + .32em);width:.42em;height:.42em;border-radius:50%;
+  transform:translateX(-50%);background:rgba(var(--hot),.95);box-shadow:0 0 8px 3px rgba(var(--light),.75),0 0 30px 10px rgba(var(--light),.25)}
+.typing #caret{animation:none;opacity:1}
+.ph{color:var(--ink);opacity:.38;font-style:italic;margin-left:.35em}
+
+/* ---------- Bedienleiste ---------- */
+.chrome{position:fixed;left:0;right:0;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:calc(env(safe-area-inset-top) + 18px) calc(env(safe-area-inset-right) + 22px) 18px calc(env(safe-area-inset-left) + 26px);
+  opacity:0;transform:translateY(-6px);transition:opacity .5s ease,transform .5s ease;pointer-events:none}
+.chrome-on .chrome{opacity:1;transform:none;pointer-events:auto}
+.meta{min-width:0}
+.meta b{display:block;font-weight:500;font-size:14px;letter-spacing:.01em;color:var(--ui-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta span{font-size:12px;color:var(--ui);letter-spacing:.04em}
+.tools{display:flex;gap:6px;align-items:center}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-user-select:none;user-select:none}
+.ic{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;color:var(--ui);transition:background .2s,color .2s}
+.ic:hover,.ic:focus-visible{background:rgba(var(--light),.10);color:var(--ui-strong);outline:none}
+.ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ic.active{color:rgb(var(--hot))}
+.pdf{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px 0 13px;border-radius:12px;margin-left:6px;
+  color:var(--ui-strong);background:rgba(var(--light),.12);box-shadow:inset 0 0 0 1px rgba(var(--light),.18);font-size:13.5px;font-weight:500;transition:background .2s}
+.pdf:hover,.pdf:focus-visible{background:rgba(var(--light),.2);outline:none}
+.pdf svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* immer sichtbarer, leiser Menüpunkt (für Touch) */
+.peek{position:fixed;z-index:4;top:calc(env(safe-area-inset-top) + 14px);right:calc(env(safe-area-inset-right) + 14px);
+  width:44px;height:44px;display:grid;place-items:center;border-radius:50%;opacity:.3;transition:opacity .4s}
+.peek i{width:5px;height:5px;border-radius:50%;background:var(--ui-strong);box-shadow:0 0 10px rgba(var(--light),.8)}
+.chrome-on .peek,.typing .peek{opacity:0;pointer-events:none}
+
+/* ---------- Einträge ---------- */
+.scrim{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .4s}
+.drawer{position:fixed;z-index:9;top:0;bottom:0;left:0;width:min(400px,92vw);display:flex;flex-direction:column;
+  background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(1.2);backdrop-filter:blur(26px) saturate(1.2);
+  box-shadow:1px 0 0 var(--line),30px 0 80px rgba(0,0,0,.45);
+  padding:calc(env(safe-area-inset-top) + 22px) 0 calc(env(safe-area-inset-bottom) + 16px) env(safe-area-inset-left);
+  transform:translateX(-104%);transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.drawer-open .drawer{transform:none}
+.drawer-open .scrim{opacity:1;pointer-events:auto}
+.dh{display:flex;align-items:center;justify-content:space-between;padding:0 18px 14px 26px}
+.dh h2{font-family:"Courier Prime",monospace;font-weight:400;font-size:22px;letter-spacing:.02em;color:var(--ui-strong)}
+.new{display:flex;align-items:center;gap:8px;margin:0 18px 10px 18px;padding:13px 14px;border-radius:14px;color:var(--ui-strong);
+  background:rgba(var(--light),.10);box-shadow:inset 0 0 0 1px rgba(var(--light),.16);font-size:14px;font-weight:500}
+.new:hover{background:rgba(var(--light),.17)}
+.new svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 10px 10px;list-style:none}
+.item{position:relative;display:flex;gap:6px;align-items:center;border-radius:14px;transition:background .2s}
+.item:hover{background:rgba(var(--light),.06)}
+.item.cur{background:rgba(var(--light),.10)}
+.item.cur::before{content:"";position:absolute;left:3px;top:16px;bottom:16px;width:2px;border-radius:2px;background:rgb(var(--hot));box-shadow:0 0 8px rgba(var(--light),.9)}
+.open{flex:1;min-width:0;text-align:left;padding:13px 6px 13px 16px}
+.open b{display:block;font-weight:500;font-size:14px;color:var(--ui-strong)}
+.open small{display:block;font-size:12px;color:var(--ui);margin-top:1px}
+.open p{font-family:"Courier Prime",monospace;font-size:13px;color:var(--ui);opacity:.85;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .ic{width:36px;height:36px;flex:none}
+.item .ic svg{width:17px;height:17px}
+.empty{padding:20px 26px;color:var(--ui);font-size:14px}
+.foot{padding:12px 26px 0;font-size:11.5px;line-height:1.5;color:var(--ui);opacity:.75}
+
+/* ---------- Hinweis ---------- */
+.toast{position:fixed;z-index:20;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translate(-50%,12px);
+  padding:11px 18px;border-radius:999px;background:var(--glass);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  box-shadow:inset 0 0 0 1px var(--line),0 10px 40px rgba(0,0,0,.4);color:var(--ui-strong);font-size:13.5px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .35s,transform .35s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+#input{position:fixed;left:50%;width:2px;height:24px;opacity:0;border:0;outline:0;resize:none;font-size:16px;color:transparent;
+  background:transparent;caret-color:transparent;z-index:-1;-webkit-user-select:text;user-select:text}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+@keyframes blink{0%,45%{opacity:1}55%,95%{opacity:.15}100%{opacity:1}}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.93}}
+@media (prefers-reduced-motion:reduce){
+  .lamp,#caret{animation:none}
+  .page{transition:none}
+}
+@media (max-width:560px){
+  .chrome{padding-left:calc(env(safe-area-inset-left) + 18px);padding-right:calc(env(safe-area-inset-right) + 12px);gap:8px}
+  .pdf span{display:none}.pdf{padding:0 11px;margin-left:2px}
+  .ic{width:38px;height:38px}
+  .meta b{font-size:13px}
+}
+</style>
+</head>
+<body data-theme="moon">
+<h1 class="sr">Lampe – Tagebuch</h1>
+
+<div class="room" id="room">
+  <div class="lamp"></div>
+  <div class="beam"></div>
+  <div class="stage"><div class="page" id="page" aria-live="off"><span id="txt"></span><span id="caret"></span><span class="ph" id="ph">Schreib einfach los.</span></div></div>
+  <div class="shelf"></div>
+  <div class="grain"></div>
+  <div class="vignette"></div>
+</div>
+
+<textarea id="input" aria-label="Tagebucheintrag schreiben" autocapitalize="sentences" autocomplete="off" autocorrect="on" spellcheck="false"></textarea>
+
+<button class="peek" id="peek" aria-label="Menü zeigen"><i></i></button>
+
+<header class="chrome" id="chrome">
+  <div class="meta"><b id="title">–</b><span id="count">0 Wörter</span></div>
+  <div class="tools">
+    <button class="ic" id="bList" aria-label="Einträge" title="Einträge">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+    <button class="ic" id="bBack" aria-label="Löschen erlauben" title="Backspace an/aus">
+      <svg viewBox="0 0 24 24"><path d="M9 5h11v14H9l-6-7z"/><path id="backX" d="M12.5 9.5l5 5m0-5l-5 5"/><path id="backSlash" d="M3 3l18 18"/></svg></button>
+    <button class="ic" id="bTheme" aria-label="Lichtfarbe wechseln" title="Mondlicht / Kerze">
+      <svg viewBox="0 0 24 24" id="themeIc"></svg></button>
+    <button class="pdf" id="bPdf" aria-label="Als PDF sichern">
+      <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 16v3h14v-3"/></svg><span>PDF sichern</span></button>
+  </div>
+</header>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Einträge">
+  <div class="dh"><h2>Einträge</h2>
+    <button class="ic" id="bClose" aria-label="Schließen"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <button class="new" id="bNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Neuer Eintrag</button>
+  <ul class="list" id="list"></ul>
+  <p class="foot">Alles bleibt auf diesem Gerät. Sichere Einträge als PDF in deinen iCloud-Ordner.</p>
+</aside>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="vendor/jspdf.umd.min.js" defer></script>
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const root = document.documentElement, body = document.body;
+const input = $("input"), page = $("page"), txt = $("txt"), caret = $("caret"), ph = $("ph");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const coarse = matchMedia("(pointer: coarse)").matches;
+
+/* ---------- Speicher ---------- */
+const KEY = "lampe.entries.v1", SKEY = "lampe.settings.v1";
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+let entries = load(KEY, []);
+let settings = Object.assign({ theme: "moon", noBack: true, seenHint: false }, load(SKEY, {}));
+let saveT;
+const saveNow = () => { try { localStorage.setItem(KEY, JSON.stringify(entries)); } catch {} };
+const save = () => { clearTimeout(saveT); saveT = setTimeout(saveNow, 400); };
+const saveSettings = () => { try { localStorage.setItem(SKEY, JSON.stringify(settings)); } catch {} };
+if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+const words = t => (t.trim().match(/\S+/g) || []).length;
+const fmtDate = ts => new Date(ts).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const fmtShort = ts => new Date(ts).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+const fmtTime = ts => new Date(ts).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+function newEntry() { const e = { id: uid(), created: Date.now(), updated: Date.now(), text: "" }; entries.unshift(e); return e; }
+let entry = entries[0];
+if (!entry || (entry.text.trim() && !sameDay(entry.created, Date.now()))) entry = newEntry();
+
+/* ---------- Licht ---------- */
+let anchorY = 0, tx = 0, ty = 0, cx = innerWidth / 2, cy = innerHeight * .55, pulse = 0, on = 0, manual = 0, running = false;
+const setVar = (k, v) => root.style.setProperty(k, v);
+
+function tick() {
+  const k = reduce ? 1 : .15;
+  cx += (tx - cx) * k; cy += (ty - cy) * k; pulse *= .9;
+  setVar("--lx", cx.toFixed(1) + "px"); setVar("--ly", cy.toFixed(1) + "px"); setVar("--pulse", pulse.toFixed(3));
+  if (Math.abs(tx - cx) > .3 || Math.abs(ty - cy) > .3 || pulse > .004) requestAnimationFrame(tick); else running = false;
+}
+const kick = () => { if (!running) { running = true; requestAnimationFrame(tick); } };
+
+function setOn(v) { on = v; setVar("--on", v.toFixed(3)); }
+function lampSequence(steps, done) {
+  if (reduce) { setOn(steps[steps.length - 1][0]); done && done(); return; }
+  let i = 0;
+  const next = () => {
+    if (i >= steps.length) { done && done(); return; }
+    const [target, ms] = steps[i++], from = on, t0 = performance.now();
+    const step = now => { const p = Math.min(1, (now - t0) / ms); setOn(from + (target - from) * (1 - Math.pow(1 - p, 3))); p < 1 ? requestAnimationFrame(step) : next(); };
+    requestAnimationFrame(step);
+  };
+  next();
+}
+const switchOn = () => lampSequence([[.55, 90], [.12, 70], [.8, 110], [.35, 60], [1, 900]]);
+
+/* ---------- Layout ---------- */
+function layout() {
+  const vv = window.visualViewport, h = vv ? vv.height : innerHeight, top = vv ? vv.offsetTop : 0;
+  anchorY = top + h * (h < 520 ? .62 : .56);
+  const ch = caret.offsetHeight || 20;
+  const maxManual = Math.max(0, caret.offsetTop);
+  manual = Math.min(Math.max(0, manual), maxManual);
+  const y = anchorY - (caret.offsetTop + ch / 2) + manual;
+  page.style.transform = `translate3d(-50%,${y.toFixed(1)}px,0)`;
+  const left = innerWidth / 2 - page.offsetWidth / 2;
+  tx = left + caret.offsetLeft + 1;
+  ty = anchorY;
+  input.style.top = (anchorY - 12) + "px";
+  body.classList.toggle("reading", manual > 4);
+  kick();
+}
+
+function render() {
+  txt.textContent = entry.text;
+  ph.style.display = entry.text ? "none" : "";
+  $("title").textContent = innerWidth < 560 ? fmtShort(entry.created) : fmtDate(entry.created);
+  const w = words(entry.text);
+  $("count").textContent = `${fmtTime(entry.created)} Uhr · ${w} ${w === 1 ? "Wort" : "Wörter"}`;
+  layout();
+}
+
+function openEntry(e) {
+  entry = e; input.value = e.text; lastVal = e.text; manual = 0;
+  render(); renderList();
+}
+
+/* ---------- Eingabe ---------- */
+let lastVal = entry.text, typingT, lastType = "";
+input.value = entry.text;
+
+input.addEventListener("beforeinput", ev => {
+  lastType = ev.inputType || "";
+  if (settings.noBack && lastType.startsWith("delete")) { ev.preventDefault(); nudge(); }
+});
+input.addEventListener("keydown", ev => {
+  if (settings.noBack && (ev.key === "Backspace" || ev.key === "Delete")) { ev.preventDefault(); nudge(); return; }
+  if (/^Arrow|^Home$|^End$|^Page/.test(ev.key)) ev.preventDefault();
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "a") ev.preventDefault();
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s") { ev.preventDefault(); exportPDF(entry); }
+});
+input.addEventListener("input", () => {
+  let v = input.value;
+  if (settings.noBack && v.length < lastVal.length && lastType.startsWith("delete")) { input.value = v = lastVal; }
+  lastVal = v;
+  entry.text = v; entry.updated = Date.now();
+  if (entries[0] !== entry) { entries.splice(entries.indexOf(entry), 1); entries.unshift(entry); }
+  manual = 0; pulse = 1;
+  render(); save();
+  body.classList.add("typing"); body.classList.remove("chrome-on");
+  clearTimeout(typingT); typingT = setTimeout(() => body.classList.remove("typing"), 1800);
+});
+const toEnd = () => { const n = input.value.length; if (input.selectionStart !== n || input.selectionEnd !== n) input.setSelectionRange(n, n); };
+document.addEventListener("selectionchange", () => { if (document.activeElement === input) toEnd(); });
+input.addEventListener("focus", () => { toEnd(); if (coarse) body.classList.remove("chrome-on"); });
+input.addEventListener("blur", () => { saveNow(); if (coarse && !body.classList.contains("drawer-open")) body.classList.add("chrome-on"); });
+
+function nudge() { // sanftes „Nein“ der Lampe
+  pulse = 1.6; kick();
+  if (!settings.seenHint) { settings.seenHint = true; saveSettings(); toast("Kein Zurück – nur vorwärts. Oben rechts umschaltbar."); }
+}
+
+const focusInput = () => { if (!body.classList.contains("drawer-open")) input.focus({ preventScroll: true }); };
+$("room").addEventListener("click", focusInput);
+
+/* Zurückscrollen zum Nachlesen */
+let dragY = null, dragMoved = false, wheelT;
+$("room").addEventListener("wheel", ev => {
+  ev.preventDefault(); manual -= ev.deltaY; body.classList.add("dragging"); layout();
+  clearTimeout(wheelT); wheelT = setTimeout(() => body.classList.remove("dragging"), 120);
+}, { passive: false });
+$("room").addEventListener("touchstart", ev => { dragY = ev.touches[0].clientY; dragMoved = false; }, { passive: true });
+$("room").addEventListener("touchmove", ev => {
+  if (dragY == null) return; const y = ev.touches[0].clientY, d = y - dragY;
+  if (Math.abs(d) > 2) { dragMoved = true; body.classList.add("dragging"); manual += d; dragY = y; layout(); }
+  ev.preventDefault();
+}, { passive: false });
+$("room").addEventListener("touchend", () => { dragY = null; body.classList.remove("dragging"); });
+
+/* ---------- Bedienleiste ---------- */
+let chromeT, lastMX = -1, lastMY = -1;
+function showChrome(ms = 2800) {
+  body.classList.add("chrome-on"); body.classList.remove("typing"); clearTimeout(chromeT);
+  if (ms && !coarse) chromeT = setTimeout(() => { if (!body.matches(":has(.chrome:hover)")) body.classList.remove("chrome-on"); else showChrome(ms); }, ms);
+}
+addEventListener("mousemove", ev => {
+  if (Math.abs(ev.clientX - lastMX) + Math.abs(ev.clientY - lastMY) > 6 && lastMX >= 0) showChrome();
+  lastMX = ev.clientX; lastMY = ev.clientY;
+});
+$("peek").addEventListener("click", ev => { ev.stopPropagation(); input.blur(); showChrome(0); });
+
+const ICONS = {
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  ember: '<path d="M12 3c2.5 3 5 5.4 5 9a5 5 0 0 1-10 0c0-2 1-3.4 2-4.5.3 1.6 1 2.5 2 3 0-2.6.4-5 1-7.5z"/>'
+};
+function applySettings() {
+  body.dataset.theme = settings.theme;
+  $("themeIc").innerHTML = ICONS[settings.theme];
+  document.querySelector('meta[name="theme-color"]').content = settings.theme === "ember" ? "#0c0806" : "#080c14";
+  const b = $("bBack");
+  b.classList.toggle("active", !settings.noBack);
+  $("backSlash").style.display = settings.noBack ? "" : "none";
+  b.setAttribute("aria-pressed", String(!settings.noBack));
+  b.setAttribute("aria-label", settings.noBack ? "Löschen ist aus – einschalten" : "Löschen ist an – ausschalten");
+}
+$("bBack").addEventListener("click", () => {
+  settings.noBack = !settings.noBack; saveSettings(); applySettings();
+  toast(settings.noBack ? "Kein Zurück – nur vorwärts" : "Löschen erlaubt");
+});
+$("bTheme").addEventListener("click", () => {
+  lampSequence([[0, 260]], () => {
+    settings.theme = settings.theme === "moon" ? "ember" : "moon"; saveSettings(); applySettings();
+    lampSequence([[.4, 120], [.15, 80], [1, 900]]);
+  });
+});
+
+/* ---------- Einträge ---------- */
+function renderList() {
+  const list = $("list"); list.innerHTML = "";
+  const shown = entries.filter(e => e.text.trim() || e === entry);
+  if (!shown.length) { list.innerHTML = '<li class="empty">Noch keine Einträge.</li>'; return; }
+  for (const e of shown) {
+    const li = document.createElement("li"); li.className = "item" + (e === entry ? " cur" : "");
+    const w = words(e.text);
+    const first = e.text.trim().split("\n")[0] || "Leer";
+    li.innerHTML = `<button class="open"><b></b><small></small><p></p></button>
+      <button class="ic" data-a="pdf" aria-label="Als PDF sichern"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 16v3h14v-3"/></svg></button>
+      <button class="ic" data-a="del" aria-label="Löschen"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg></button>`;
+    li.querySelector("b").textContent = fmtShort(e.created);
+    li.querySelector("small").textContent = `${fmtTime(e.created)} Uhr · ${w} ${w === 1 ? "Wort" : "Wörter"}`;
+    li.querySelector("p").textContent = first;
+    li.querySelector(".open").onclick = () => { openEntry(e); closeDrawer(); };
+    li.querySelector('[data-a="pdf"]').onclick = () => exportPDF(e);
+    li.querySelector('[data-a="del"]').onclick = () => {
+      if (!confirm(`Eintrag vom ${fmtShort(e.created)} wirklich löschen?`)) return;
+      entries.splice(entries.indexOf(e), 1);
+      if (e === entry) openEntry(entries.find(x => sameDay(x.created, Date.now())) || newEntry());
+      saveNow(); renderList();
+    };
+    list.appendChild(li);
+  }
+}
+function openDrawer() { input.blur(); renderList(); body.classList.add("drawer-open"); }
+function closeDrawer() { body.classList.remove("drawer-open"); if (!coarse) setTimeout(focusInput, 50); }
+$("bList").addEventListener("click", openDrawer);
+$("bClose").addEventListener("click", closeDrawer);
+$("scrim").addEventListener("click", closeDrawer);
+$("bNew").addEventListener("click", () => {
+  const e = entry.text.trim() ? newEntry() : entry; e.created = Date.now();
+  openEntry(e); saveNow(); closeDrawer();
+  if (coarse) setTimeout(() => input.focus({ preventScroll: true }), 60);
+});
+addEventListener("keydown", ev => { if (ev.key === "Escape") body.classList.contains("drawer-open") ? closeDrawer() : showChrome(); });
+
+/* ---------- Hinweis ---------- */
+let toastT;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
+
+/* ---------- PDF ---------- */
+const fonts = {};
+const b64 = buf => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
+const fontsReady = Promise.all([["r", "vendor/CourierPrime-Regular.ttf"], ["i", "vendor/CourierPrime-Italic.ttf"]]
+  .map(([k, u]) => fetch(u).then(r => r.arrayBuffer()).then(buf => { fonts[k] = b64(buf); }))).catch(() => {});
+
+function fileName(e) {
+  const d = new Date(e.created), p = n => String(n).padStart(2, "0");
+  const day = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const multi = entries.filter(x => x.text.trim() && sameDay(x.created, e.created)).length > 1;
+  return `${day} Tagebuch${multi ? ` (${p(d.getHours())}.${p(d.getMinutes())})` : ""}.pdf`;
+}
+
+function buildPDF(e) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+  const F = fonts.r ? "CP" : "courier";
+  if (fonts.r) { doc.addFileToVFS("CP.ttf", fonts.r); doc.addFont("CP.ttf", "CP", "normal"); }
+  if (fonts.i) { doc.addFileToVFS("CPI.ttf", fonts.i); doc.addFont("CPI.ttf", "CP", "italic"); }
+  const W = 210, H = 297, M = 25, TW = W - 2 * M, LH = 6.3, ink = [28, 31, 38], grey = [138, 144, 156];
+  doc.setProperties({ title: `Tagebuch – ${fmtDate(e.created)}`, creator: "Lampe" });
+
+  let y = 30;
+  doc.setFont(F, "normal").setFontSize(7.5).setTextColor(...grey);
+  doc.text("TAGEBUCH", M, y, { charSpace: 1.4 });
+  y += 9;
+  doc.setFontSize(19).setTextColor(...ink);
+  doc.text(fmtDate(e.created), M, y);
+  y += 6.5;
+  const w = words(e.text);
+  doc.setFont(F, fonts.i ? "italic" : "normal").setFontSize(9).setTextColor(...grey);
+  doc.text(`${fmtTime(e.created)} Uhr  ·  ${w} ${w === 1 ? "Wort" : "Wörter"}`, M, y);
+  y += 6;
+  doc.setDrawColor(215, 218, 224).setLineWidth(.2).line(M, y, M + 28, y);
+  y += 11;
+
+  doc.setFont(F, "normal").setFontSize(11.5).setTextColor(...ink);
+  const paras = (e.text.replace(/\s+$/, "") || " ").split("\n");
+  for (const para of paras) {
+    const lines = para.trim() === "" ? [""] : doc.splitTextToSize(para, TW);
+    for (const ln of lines) {
+      if (y > H - 27) { doc.addPage(); y = 27; doc.setFont(F, "normal").setFontSize(11.5).setTextColor(...ink); }
+      if (ln) doc.text(ln, M, y);
+      y += LH;
+    }
+  }
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); doc.setFont(F, "normal").setFontSize(8).setTextColor(...grey);
+    doc.text(`${i} / ${n}`, W / 2, H - 13, { align: "center" });
+  }
+  return doc.output("blob");
+}
+
+async function exportPDF(e) {
+  saveNow();
+  if (!e.text.trim()) { toast("Der Eintrag ist noch leer."); return; }
+  if (!window.jspdf) { toast("Einen Moment …"); return; }
+  if (!fonts.r) await fontsReady;
+  const name = fileName(e);
+  const blob = buildPDF(e);
+  const file = new File([blob], name, { type: "application/pdf" });
+  if (coarse && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); toast("PDF bereit"); return; }
+    catch (err) { if (err && err.name === "AbortError") return; }
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(`„${name}“ gesichert`);
+}
+$("bPdf").addEventListener("click", () => exportPDF(entry));
+
+/* ---------- Start ---------- */
+applySettings();
+const relayout = () => layout();
+addEventListener("resize", relayout);
+window.visualViewport?.addEventListener("resize", relayout);
+window.visualViewport?.addEventListener("scroll", relayout);
+document.addEventListener("visibilitychange", () => { if (document.hidden) saveNow(); });
+addEventListener("pagehide", saveNow);
+document.fonts.ready.then(() => {
+  render(); cx = tx; cy = ty; setVar("--lx", cx + "px"); setVar("--ly", cy + "px");
+  setTimeout(switchOn, 250);
+  if (!coarse) focusInput(); else body.classList.add("chrome-on");
+});
+render();
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
