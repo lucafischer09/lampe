@@ -141,8 +141,14 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
   opacity:0;pointer-events:none;transition:opacity .35s,transform .35s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
-#input{position:fixed;left:50%;width:2px;height:24px;opacity:0;border:0;outline:0;resize:none;font-size:16px;color:transparent;
-  background:transparent;caret-color:transparent;z-index:-1;-webkit-user-select:text;user-select:text}
+/* echtes Textfeld liegt exakt über dem Text: Cursor setzen, markieren, Writing Tools */
+#input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;outline:0;resize:none;overflow:hidden;
+  font:inherit;line-height:inherit;letter-spacing:inherit;white-space:pre-wrap;overflow-wrap:break-word;
+  color:var(--ink);text-shadow:inherit;background:transparent;caret-color:transparent;-webkit-user-select:text;user-select:text;z-index:1}
+#input::selection{background:rgba(var(--light),.32);color:var(--ink)}
+#txt,#after{color:transparent;text-shadow:none}
+#caret,.ph{pointer-events:none;position:relative;z-index:2}
+.sel #caret{opacity:0!important}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
 /* ---------- Creamy-Tastatur ---------- */
@@ -266,13 +272,12 @@ body:not(.kb-on) .kbset{display:none}
 <div class="room" id="room">
   <div class="lamp"></div>
   <div class="beam"></div>
-  <div class="stage"><div class="page" id="page" aria-live="off"><span id="txt"></span><span id="caret"></span><span class="ph" id="ph">Schreib einfach los.</span></div></div>
+  <div class="stage"><div class="page" id="page" aria-live="off"><span id="txt"></span><span id="caret"></span><span id="after"></span><span class="ph" id="ph">Schreib einfach los.</span><textarea id="input" aria-label="Tagebucheintrag schreiben" autocapitalize="sentences" autocomplete="off" autocorrect="on" spellcheck="true"></textarea></div></div>
   <div class="shelf"></div>
   <div class="grain"></div>
   <div class="vignette"></div>
 </div>
 
-<textarea id="input" aria-label="Tagebucheintrag schreiben" autocapitalize="sentences" autocomplete="off" autocorrect="on" spellcheck="true"></textarea>
 
 <button class="peek" id="peek" aria-label="Menü zeigen"><i></i></button>
 
@@ -463,13 +468,14 @@ function layout() {
   const left = innerWidth / 2 - page.offsetWidth / 2;
   tx = left + caret.offsetLeft + 1;
   ty = anchorY;
-  input.style.top = (anchorY - 12) + "px";
   body.classList.toggle("reading", manual > 4);
   kick();
 }
 
 function render() {
-  txt.textContent = entry.text;
+  const t = entry.text, a = Math.min(input.selectionStart ?? t.length, t.length), b = input.selectionEnd ?? a;
+  txt.textContent = t.slice(0, a); $("after").textContent = t.slice(a) + "\n";
+  body.classList.toggle("sel", b > a);
   ph.style.display = entry.text ? "none" : "";
   $("title").textContent = innerWidth < 560 ? fmtShort(entry.created) : fmtDate(entry.created);
   const w = words(entry.text);
@@ -492,8 +498,6 @@ input.addEventListener("beforeinput", ev => {
 });
 input.addEventListener("keydown", ev => {
   if (settings.noBack && (ev.key === "Backspace" || ev.key === "Delete")) { ev.preventDefault(); nudge(); return; }
-  if (/^Arrow|^Home$|^End$|^Page/.test(ev.key)) ev.preventDefault();
-  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "a") ev.preventDefault();
   if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s") { ev.preventDefault(); exportPDF(entry); }
 });
 input.addEventListener("input", () => {
@@ -512,9 +516,13 @@ input.addEventListener("input", () => {
   body.classList.add("typing"); body.classList.remove("chrome-on");
   clearTimeout(typingT); typingT = setTimeout(() => { body.classList.remove("typing"); if (coarse && kbOn()) body.classList.add("chrome-on"); }, 1800);
 });
-const toEnd = () => { const n = input.value.length; if (input.selectionStart !== n || input.selectionEnd !== n) input.setSelectionRange(n, n); };
-document.addEventListener("selectionchange", () => { if (document.activeElement === input) toEnd(); });
-input.addEventListener("focus", () => { toEnd(); if (coarse) body.classList.remove("chrome-on"); });
+// Cursor frei bewegen: Lampe folgt der Stelle, an der geschrieben wird
+let selRaf = 0;
+document.addEventListener("selectionchange", () => {
+  if (document.activeElement !== input || selRaf) return;
+  selRaf = requestAnimationFrame(() => { selRaf = 0; manual = 0; render(); });
+});
+input.addEventListener("focus", () => { if (coarse) body.classList.remove("chrome-on"); });
 input.addEventListener("blur", () => { saveNow(); if (coarse && !body.classList.contains("drawer-open")) body.classList.add("chrome-on"); });
 
 function nudge() { // sanftes „Nein“ der Lampe
@@ -531,7 +539,7 @@ $("room").addEventListener("wheel", ev => {
   ev.preventDefault(); manual -= ev.deltaY; body.classList.add("dragging"); layout();
   clearTimeout(wheelT); wheelT = setTimeout(() => body.classList.remove("dragging"), 120);
 }, { passive: false });
-$("room").addEventListener("touchstart", ev => { dragY = ev.touches[0].clientY; dragMoved = false; }, { passive: true });
+$("room").addEventListener("touchstart", ev => { if (ev.target === input && document.activeElement === input) { dragY = null; return; } dragY = ev.touches[0].clientY; dragMoved = false; }, { passive: true });
 $("room").addEventListener("touchmove", ev => {
   if (dragY == null) return; const y = ev.touches[0].clientY, d = y - dragY;
   if (Math.abs(d) > 2) { dragMoved = true; body.classList.add("dragging"); manual += d; dragY = y; layout(); }
@@ -713,8 +721,10 @@ function insertText(ch) {
   if (ch === "\b") {
     if (settings.noBack) { nudge(); return false; }
     lastType = "deleteContentBackward";
-    input.value = [...input.value].slice(0, -1).join("");
-  } else { lastType = "insertText"; input.value += ch; }
+    const v = input.value, a = input.selectionStart, b = input.selectionEnd;
+    if (a !== b) input.setRangeText("", a, b, "end");
+    else if (a > 0) { const pre = [...v.slice(0, a)].slice(0, -1).join(""); input.setRangeText("", pre.length, a, "end"); }
+  } else { lastType = "insertText"; input.setRangeText(ch, input.selectionStart, input.selectionEnd, "end"); }
   lastKeyAt = performance.now();
   input.dispatchEvent(new Event("input"));
   return true;
